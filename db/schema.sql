@@ -309,7 +309,7 @@ declare
   t text;
 begin
   foreach t in array array[
-    'user_profiles', 'nutrition_targets', 'ingredients', 'ingredient_prices',
+    'nutrition_targets', 'ingredients', 'ingredient_prices',
     'recipes', 'takeaways', 'meal_plans', 'food_logs', 'exercise_logs',
     'pantry_items', 'leftovers', 'shopping_lists', 'weight_logs'
   ]

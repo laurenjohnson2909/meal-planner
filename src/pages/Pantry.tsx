@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select, Badge } from '../components/ui/Primitives'
+import { IngredientPicker } from '../components/ui/IngredientPicker'
 import { useDeletePantryItem, usePantry, useSavePantryItem } from '../hooks/usePantry'
 import { useIngredients } from '../hooks/useIngredients'
 import { useAddLeftover, useDeleteLeftover, useLeftovers, useUpdateLeftover } from '../hooks/useLeftovers'
@@ -83,21 +84,15 @@ export function Pantry() {
       <Modal open={open} onClose={() => setOpen(false)} title="Add pantry item">
         <div className="space-y-3">
           <Field label="Ingredient">
-            <Select
+            <IngredientPicker
+              ingredients={ingredients ?? []}
               value={ingredientId}
-              onChange={(e) => {
-                setIngredientId(e.target.value)
-                const ing = ingredients?.find((i) => i.id === e.target.value)
+              onChange={(id) => {
+                setIngredientId(id)
+                const ing = ingredients?.find((i) => i.id === id)
                 if (ing) setUnit(ing.nutrition_basis_unit)
               }}
-            >
-              <option value="">Select an ingredient…</option>
-              {ingredients?.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.name}
-                </option>
-              ))}
-            </Select>
+            />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Quantity">

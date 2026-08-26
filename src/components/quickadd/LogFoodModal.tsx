@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Modal, Button, Field, Input, Select } from '../ui/Primitives'
+import { IngredientPicker } from '../ui/IngredientPicker'
 import { useRecipes } from '../../hooks/useRecipes'
 import { useIngredients, useIngredientUnitConversions } from '../../hooks/useIngredients'
 import { useFoodLog, useAddFoodLogItem, useRecentFoodLogItems } from '../../hooks/useFoodLog'
@@ -233,21 +234,15 @@ export function LogFoodModal({ open, onClose }: { open: boolean; onClose: () => 
         {tab === 'ingredient' && (
           <div className="space-y-3">
             <Field label="Ingredient">
-              <Select
+              <IngredientPicker
+                ingredients={ingredients ?? []}
                 value={ingredientId}
-                onChange={(e) => {
-                  setIngredientId(e.target.value)
-                  const ing = ingredients?.find((i) => i.id === e.target.value)
+                onChange={(id) => {
+                  setIngredientId(id)
+                  const ing = ingredients?.find((i) => i.id === id)
                   if (ing) setIngredientUnit(ing.nutrition_basis_unit)
                 }}
-              >
-                <option value="">Select an ingredient…</option>
-                {ingredients?.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.name}
-                  </option>
-                ))}
-              </Select>
+              />
               {selectedIngredient && (
                 <p className="mt-1 text-xs text-text-dim">
                   {selectedIngredient.calories} kcal / {selectedIngredient.nutrition_basis_amount}

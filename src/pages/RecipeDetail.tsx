@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Star, Trash2, TriangleAlert, X } from 'lucide-react'
 import { PageHeader, Button, Card, Field, Input, Select, Textarea, Spinner } from '../components/ui/Primitives'
+import { IngredientPicker } from '../components/ui/IngredientPicker'
 import { useDeleteRecipe, useRecipe, useSaveRecipe, useToggleFavourite, type RecipeIngredientInput } from '../hooks/useRecipes'
 import { useIngredientPrices, useIngredients, useIngredientUnitConversions } from '../hooks/useIngredients'
 import {
@@ -307,13 +308,12 @@ export function RecipeDetail() {
                 return (
                   <div key={i}>
                     <div className="flex gap-2">
-                      <Select className="flex-1" value={row.ingredient_id} onChange={(e) => updateIngredientRow(i, { ingredient_id: e.target.value })}>
-                        {allIngredients?.map((ing) => (
-                          <option key={ing.id} value={ing.id}>
-                            {ing.name}
-                          </option>
-                        ))}
-                      </Select>
+                      <IngredientPicker
+                        className="flex-1"
+                        ingredients={allIngredients ?? []}
+                        value={row.ingredient_id}
+                        onChange={(ingredient_id) => updateIngredientRow(i, { ingredient_id })}
+                      />
                       <Input
                         type="number"
                         className="w-20"

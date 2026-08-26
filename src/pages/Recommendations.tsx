@@ -5,8 +5,10 @@ import { usePantry } from '../hooks/usePantry'
 import { useMealPlan } from '../hooks/useMealPlan'
 import { useFoodLog } from '../hooks/useFoodLog'
 import { useNutritionTargets } from '../hooks/useProfile'
+import { useIngredientUnitConversions } from '../hooks/useIngredients'
 import { whatCanIMake } from '../lib/recommend'
 import { sumNutrition } from '../lib/nutrition'
+import { buildConversionsByIngredient } from '../lib/units'
 import { todayStr, weekStart } from '../lib/dates'
 
 export function Recommendations() {
@@ -15,6 +17,8 @@ export function Recommendations() {
   const { data: plan } = useMealPlan(weekStart())
   const { data: log } = useFoodLog(todayStr())
   const { data: targets } = useNutritionTargets()
+  const { data: allConversions } = useIngredientUnitConversions()
+  const conversions = buildConversionsByIngredient(allConversions ?? [])
 
   const plannedIngredientIds = new Set(
     (plan?.items ?? []).flatMap((i) => i.recipe?.recipe_ingredients.map((ri) => ri.ingredient_id) ?? []),
@@ -23,7 +27,7 @@ export function Recommendations() {
   const remainingCalories = (targets?.calories ?? 2000) - eaten.calories
   const remainingProtein = (targets?.protein_g ?? 120) - eaten.protein_g
 
-  const results = whatCanIMake(recipes ?? [], pantry ?? [], plannedIngredientIds, remainingCalories, remainingProtein)
+  const results = whatCanIMake(recipes ?? [], pantry ?? [], plannedIngredientIds, remainingCalories, remainingProtein, conversions)
 
   return (
     <div>

@@ -8,7 +8,9 @@ import { useExerciseLogs } from '../hooks/useExercise'
 import { usePantry } from '../hooks/usePantry'
 import { useLeftovers } from '../hooks/useLeftovers'
 import { useRecipes } from '../hooks/useRecipes'
+import { useIngredientUnitConversions } from '../hooks/useIngredients'
 import { calorieTargetForDay, sumNutrition } from '../lib/nutrition'
+import { buildConversionsByIngredient } from '../lib/units'
 import { dayOfWeekIndex, todayStr, weekStart } from '../lib/dates'
 import { useQuickAdd } from '../hooks/useQuickAdd'
 import { analyseIngredientReuse } from '../lib/reuse'
@@ -27,6 +29,8 @@ export function Dashboard() {
   const { data: pantry } = usePantry()
   const { data: leftovers } = useLeftovers()
   const { data: recipes } = useRecipes()
+  const { data: allConversions } = useIngredientUnitConversions()
+  const conversions = buildConversionsByIngredient(allConversions ?? [])
 
   const eaten = sumNutrition(log?.items ?? [])
   const todaysPlanItems = (plan?.items ?? []).filter((i) => i.day_of_week === dayIndex)
@@ -49,13 +53,13 @@ export function Dashboard() {
   const soonToExpire = (pantry ?? []).filter((p) => isSoon(p.use_by_date))
   const leftoversExpiringSoon = (leftovers ?? []).filter((l) => isSoon(l.use_by_date))
 
-  const reuseUsage = analyseIngredientReuse(plan?.items ?? [])
+  const reuseUsage = analyseIngredientReuse(plan?.items ?? [], conversions)
   const repeatedIngredients = reuseUsage.filter((u) => u.recipeCount >= 3).slice(0, 5)
 
   const plannedIngredientIds = new Set(
     (plan?.items ?? []).flatMap((i) => i.recipe?.recipe_ingredients.map((ri) => ri.ingredient_id) ?? []),
   )
-  const fittingMeals = whatCanIMake(recipes ?? [], pantry ?? [], plannedIngredientIds, remaining.calories, remaining.protein_g)
+  const fittingMeals = whatCanIMake(recipes ?? [], pantry ?? [], plannedIngredientIds, remaining.calories, remaining.protein_g, conversions)
     .filter((r) => r.fitsRemaining && r.missingIngredientCount === 0)
     .slice(0, 3)
 

@@ -53,7 +53,7 @@ export function optimiseWeek(input: OptimiserInput): OptimiserResult {
     if (!recipe) continue
     for (const line of recipe.recipe_ingredients) usedIngredientIds.add(line.ingredient_id)
     recipeUseCount.set(recipe.id, (recipeUseCount.get(recipe.id) ?? 0) + 1)
-    const perServing = recipePerServing(recipe.recipe_ingredients, recipe.servings)
+    const perServing = recipePerServing(recipe.recipe_ingredients, recipe.servings, conversions)
     dayTotals.set(slot.dayOfWeek, addDay(dayTotals.get(slot.dayOfWeek), perServing))
   }
 
@@ -88,7 +88,7 @@ export function optimiseWeek(input: OptimiserInput): OptimiserResult {
     assignments.set(slot.key, chosen.id)
     recipeUseCount.set(chosen.id, (recipeUseCount.get(chosen.id) ?? 0) + 1)
     for (const line of chosen.recipe_ingredients) usedIngredientIds.add(line.ingredient_id)
-    const perServing = recipePerServing(chosen.recipe_ingredients, chosen.servings)
+    const perServing = recipePerServing(chosen.recipe_ingredients, chosen.servings, conversions)
     dayTotals.set(slot.dayOfWeek, addDay(dayTotals.get(slot.dayOfWeek), perServing))
   }
 
@@ -116,7 +116,7 @@ function scoreRecipe(
     recipeUseCount: Map<string, number>
   },
 ): number {
-  const perServing = recipePerServing(recipe.recipe_ingredients, recipe.servings)
+  const perServing = recipePerServing(recipe.recipe_ingredients, recipe.servings, ctx.conversions)
   const totalCost = recipeCostTotal(recipe.recipe_ingredients, ctx.packsByIngredient, ctx.conversions)
   const costPerServing = recipeCostPerServing(totalCost, recipe.servings)
   const overlapCount = recipe.recipe_ingredients.filter((l) => ctx.usedIngredientIds.has(l.ingredient_id)).length

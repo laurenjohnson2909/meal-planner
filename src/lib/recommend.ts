@@ -1,5 +1,5 @@
 import type { PantryItemWithIngredient, RecipeWithDetails } from '../types/models'
-import { recipePerServing } from './nutrition'
+import { recipePerServing, type ConversionsByIngredient } from './nutrition'
 
 export interface RecommendedRecipe {
   recipe: RecipeWithDetails
@@ -20,6 +20,7 @@ export function whatCanIMake(
   alreadyPlannedIngredientIds: Set<string>,
   remainingCalories: number,
   remainingProtein: number,
+  conversions: ConversionsByIngredient = new Map(),
 ): RecommendedRecipe[] {
   const ownedIds = new Set<string>([
     ...pantry.filter((p) => p.quantity > 0).map((p) => p.ingredient_id),
@@ -30,7 +31,7 @@ export function whatCanIMake(
     const lines = recipe.recipe_ingredients
     const owned = lines.filter((l) => ownedIds.has(l.ingredient_id))
     const missing = lines.filter((l) => !ownedIds.has(l.ingredient_id))
-    const perServing = recipePerServing(lines, recipe.servings)
+    const perServing = recipePerServing(lines, recipe.servings, conversions)
     const fitsCalories = perServing.calories <= Math.max(remainingCalories, 0) + 200 || remainingCalories <= 0
     const helpsProtein = remainingProtein <= 0 || perServing.protein_g >= remainingProtein * 0.15
     return {

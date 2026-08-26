@@ -3,11 +3,15 @@ import { Link } from 'react-router-dom'
 import { Plus, Search, Star } from 'lucide-react'
 import { PageHeader, Button, Card, EmptyState, Input, Spinner } from '../components/ui/Primitives'
 import { useRecipes } from '../hooks/useRecipes'
+import { useIngredientUnitConversions } from '../hooks/useIngredients'
 import { recipePerServing } from '../lib/nutrition'
+import { buildConversionsByIngredient } from '../lib/units'
 import { RECIPE_TAGS } from '../types/models'
 
 export function Recipes() {
   const { data: recipes, isLoading } = useRecipes()
+  const { data: allConversions } = useIngredientUnitConversions()
+  const conversions = buildConversionsByIngredient(allConversions ?? [])
   const [search, setSearch] = useState('')
   const [activeTags, setActiveTags] = useState<string[]>([])
   const [favouritesOnly, setFavouritesOnly] = useState(false)
@@ -73,7 +77,7 @@ export function Recipes() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((recipe) => {
-            const perServing = recipePerServing(recipe.recipe_ingredients, recipe.servings)
+            const perServing = recipePerServing(recipe.recipe_ingredients, recipe.servings, conversions)
             return (
               <Link key={recipe.id} to={`/recipes/${recipe.id}`}>
                 <Card className="h-full hover:border-primary/50">

@@ -103,7 +103,7 @@ export function LogFoodModal({ open, onClose }: { open: boolean; onClose: () => 
     if (tab === 'recipe') {
       const recipe = recipes?.find((r) => r.id === recipeId)
       if (!recipe) return
-      const perServing = recipePerServing(recipe.recipe_ingredients, recipe.servings)
+      const perServing = recipePerServing(recipe.recipe_ingredients, recipe.servings, conversions)
       await addItem.mutateAsync({
         ...base,
         source_type: 'recipe',

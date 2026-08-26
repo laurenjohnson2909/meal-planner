@@ -4,8 +4,10 @@ import { Button, Card, EmptyState, PageHeader, ProgressBar } from '../components
 import { useDeleteFoodLogItem, useFoodLog, useAddFoodLogItem } from '../hooks/useFoodLog'
 import { useMealPlan } from '../hooks/useMealPlan'
 import { useNutritionTargets } from '../hooks/useProfile'
+import { useIngredientUnitConversions } from '../hooks/useIngredients'
 import { addDaysToDate, dayOfWeekIndex, dayLabel, todayStr, weekStart } from '../lib/dates'
 import { recipePerServing, sumNutrition } from '../lib/nutrition'
+import { buildConversionsByIngredient } from '../lib/units'
 import { MEAL_SLOTS } from '../types/models'
 import { useQuickAdd } from '../hooks/useQuickAdd'
 
@@ -14,6 +16,8 @@ export function FoodLog() {
   const { data: log } = useFoodLog(date)
   const { data: targets } = useNutritionTargets()
   const { data: plan } = useMealPlan(weekStart(new Date(date)))
+  const { data: allConversions } = useIngredientUnitConversions()
+  const conversions = buildConversionsByIngredient(allConversions ?? [])
   const deleteItem = useDeleteFoodLogItem()
   const addItem = useAddFoodLogItem()
   const quickAdd = useQuickAdd()
@@ -28,7 +32,7 @@ export function FoodLog() {
     const item = plannedToday.find((i) => i.id === planItemId)
     if (!item) return
     if (item.recipe) {
-      const perServing = recipePerServing(item.recipe.recipe_ingredients, item.recipe.servings)
+      const perServing = recipePerServing(item.recipe.recipe_ingredients, item.recipe.servings, conversions)
       await addItem.mutateAsync({
         food_log_id: log.logId,
         meal_slot: item.meal_slot,

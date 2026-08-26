@@ -5,7 +5,9 @@ import { AssignMealModal } from '../components/plan/AssignMealModal'
 import { OptimiseModal } from '../components/plan/OptimiseModal'
 import { useDeletePlanItem, useDuplicatePlanItem, useMealPlan, useUpdatePlanItem } from '../hooks/useMealPlan'
 import { useRecipes } from '../hooks/useRecipes'
+import { useIngredientUnitConversions } from '../hooks/useIngredients'
 import { addDaysToDate, dayLabel, weekStart } from '../lib/dates'
+import { buildConversionsByIngredient } from '../lib/units'
 import { DAYS_OF_WEEK, MEAL_SLOTS } from '../types/models'
 import type { MealPlanItemWithDetails, MealSlot } from '../types/models'
 import { analyseIngredientReuse, singleUseIngredients, suggestReuseAlternatives } from '../lib/reuse'
@@ -16,12 +18,14 @@ export function WeeklyPlan() {
   const [optimiseOpen, setOptimiseOpen] = useState(false)
   const { data: plan } = useMealPlan(weekOf)
   const { data: allRecipes } = useRecipes()
+  const { data: allConversions } = useIngredientUnitConversions()
+  const conversions = buildConversionsByIngredient(allConversions ?? [])
   const updateItem = useUpdatePlanItem()
   const deleteItem = useDeletePlanItem()
   const duplicateItem = useDuplicatePlanItem()
 
   const items = plan?.items ?? []
-  const usage = analyseIngredientReuse(items)
+  const usage = analyseIngredientReuse(items, conversions)
   const singleUse = singleUseIngredients(usage)
   const plannedIngredientIds = new Set(items.flatMap((i) => i.recipe?.recipe_ingredients.map((ri) => ri.ingredient_id) ?? []))
   const alternatives = suggestReuseAlternatives(

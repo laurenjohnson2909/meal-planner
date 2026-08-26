@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Modal, Button, Field, Select } from '../ui/Primitives'
 import { optimiseWeek, type OptimiseSlot } from '../../lib/optimizer'
 import { useRecipes } from '../../hooks/useRecipes'
-import { useIngredientPrices } from '../../hooks/useIngredients'
+import { useIngredientPrices, useIngredientUnitConversions } from '../../hooks/useIngredients'
+import { buildConversionsByIngredient } from '../../lib/units'
 import { useNutritionTargets } from '../../hooks/useProfile'
 import { useAddPlanItem, useUpdatePlanItem, type MealPlanItemInput } from '../../hooks/useMealPlan'
 import type { MealPlanItemWithDetails, MealSlot, OptimisePriority } from '../../types/models'
@@ -32,6 +33,7 @@ export function OptimiseModal({
   const [applying, setApplying] = useState(false)
   const { data: recipes } = useRecipes()
   const { data: prices } = useIngredientPrices()
+  const { data: allConversions } = useIngredientUnitConversions()
   const { data: targets } = useNutritionTargets()
   const addItem = useAddPlanItem()
   const updateItem = useUpdatePlanItem()
@@ -54,7 +56,8 @@ export function OptimiseModal({
         }
       }
 
-      const pricesByIngredient = new Map((prices ?? []).map((p) => [p.ingredient_id, { price: p.price, quantity: p.quantity }]))
+      const packsByIngredient = new Map((prices ?? []).map((p) => [p.ingredient_id, p]))
+      const conversions = buildConversionsByIngredient(allConversions ?? [])
 
       const result = optimiseWeek({
         slots,
@@ -62,7 +65,8 @@ export function OptimiseModal({
         priority,
         dailyCalorieTarget: targets?.calories ?? 2000,
         dailyProteinTarget: targets?.protein_g ?? 120,
-        pricesByIngredient,
+        packsByIngredient,
+        conversions,
       })
 
       for (const slot of slots) {

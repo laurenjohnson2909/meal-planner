@@ -1,4 +1,5 @@
 import type { Ingredient, MealPlanItemWithDetails } from '../types/models'
+import { convertToUnit, type UnitConversion } from './units'
 
 export type PlannedItemForReuse = MealPlanItemWithDetails
 
@@ -16,7 +17,10 @@ export interface IngredientUsage {
  * recipes use each one, flag ingredients only used once. Matching is by ingredient
  * row id (canonical id) only — never by fuzzy name, so e.g. 5% vs 20% mince never merge.
  */
-export function analyseIngredientReuse(planItems: PlannedItemForReuse[]): IngredientUsage[] {
+export function analyseIngredientReuse(
+  planItems: PlannedItemForReuse[],
+  conversions: Map<string, Map<string, UnitConversion>> = new Map(),
+): IngredientUsage[] {
   const byIngredient = new Map<string, IngredientUsage>()
 
   for (const item of planItems) {
@@ -29,15 +33,19 @@ export function analyseIngredientReuse(planItems: PlannedItemForReuse[]): Ingred
     const seenInThisRecipe = new Set<string>()
 
     for (const line of lines) {
+      const canonicalUnit = line.ingredient.nutrition_basis_unit
+      const convs = conversions.get(line.ingredient.id) ?? new Map()
+      const equivalent = convertToUnit(line.ingredient, line.quantity, line.unit, canonicalUnit, convs)
+
       const existing = byIngredient.get(line.ingredient.id) ?? {
         ingredient: line.ingredient,
         recipeCount: 0,
         recipeNames: [],
         totalQuantity: 0,
-        unit: line.unit,
+        unit: canonicalUnit,
         singleUse: false,
       }
-      existing.totalQuantity += line.quantity * servingFactor
+      if (equivalent !== null) existing.totalQuantity += equivalent * servingFactor
       if (!seenInThisRecipe.has(recipe.id)) {
         existing.recipeCount += 1
         existing.recipeNames.push(recipe.name)

@@ -55,21 +55,17 @@ export interface NutritionTargets extends NutritionValues {
   updated_at: string
 }
 
-export interface Ingredient {
+export interface Ingredient extends NutritionValues {
   id: string
   user_id: string
   name: string
   brand: string | null
   category: string | null
-  calories_per_100g: number
-  protein_per_100g: number
-  carbs_per_100g: number
-  fat_per_100g: number
-  fibre_per_100g: number
-  sugar_per_100g: number
-  saturated_fat_per_100g: number
-  salt_per_100g: number
-  default_unit: string
+  /** Nutrition values apply to this amount of nutrition_basis_unit, e.g. 100 + 'g', or 1 + 'item'. */
+  nutrition_basis_amount: number
+  nutrition_basis_unit: string
+  /** Optional bridge for item-based ingredients, e.g. "1 banana ≈ 120g". */
+  reference_weight_g: number | null
   created_at: string
 }
 
@@ -77,10 +73,19 @@ export interface IngredientPrice {
   id: string
   user_id: string
   ingredient_id: string
-  price: number
-  quantity: number
-  unit: string
+  pack_price: number
+  pack_size: number
+  pack_size_unit: string
   updated_at: string
+}
+
+export interface IngredientUnitConversion {
+  id: string
+  user_id: string
+  ingredient_id: string
+  unit: string
+  equivalent_amount: number
+  equivalent_unit: 'g' | 'ml'
 }
 
 export interface Recipe {

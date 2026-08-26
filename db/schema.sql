@@ -43,36 +43,96 @@ create table if not exists nutrition_targets (
 -- Ingredients
 -- ============================================================
 
+-- Nutrition values apply to `nutrition_basis_amount` of `nutrition_basis_unit`
+-- (e.g. 389 kcal per 100 g, or 72 kcal per 1 item) — never assumed to be per-100g.
+-- `reference_weight_g` is an optional bridge for item-based ingredients (e.g. "1
+-- banana ≈ 120g") so a recipe can measure them by weight instead of by item.
 create table if not exists ingredients (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade default auth.uid(),
   name text not null,
   brand text,
   category text,
-  calories_per_100g numeric not null default 0,
-  protein_per_100g numeric not null default 0,
-  carbs_per_100g numeric not null default 0,
-  fat_per_100g numeric not null default 0,
-  fibre_per_100g numeric not null default 0,
-  sugar_per_100g numeric not null default 0,
-  saturated_fat_per_100g numeric not null default 0,
-  salt_per_100g numeric not null default 0,
-  default_unit text not null default 'g',
+  nutrition_basis_amount numeric not null default 100,
+  nutrition_basis_unit text not null default 'g',
+  calories numeric not null default 0,
+  protein_g numeric not null default 0,
+  carbs_g numeric not null default 0,
+  fat_g numeric not null default 0,
+  fibre_g numeric not null default 0,
+  sugar_g numeric not null default 0,
+  saturated_fat_g numeric not null default 0,
+  salt_g numeric not null default 0,
+  reference_weight_g numeric,
   created_at timestamptz not null default now()
 );
 create index if not exists ingredients_user_idx on ingredients(user_id);
 
+-- Migrate an ingredients table created before the flexible-units update: rename the
+-- old per-100g columns (values unchanged) and backfill the new basis columns so
+-- every existing row keeps meaning exactly what it always did — "per 100g".
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ingredients' and column_name = 'calories_per_100g') then
+    alter table ingredients rename column calories_per_100g to calories;
+    alter table ingredients rename column protein_per_100g to protein_g;
+    alter table ingredients rename column carbs_per_100g to carbs_g;
+    alter table ingredients rename column fat_per_100g to fat_g;
+    alter table ingredients rename column fibre_per_100g to fibre_g;
+    alter table ingredients rename column sugar_per_100g to sugar_g;
+    alter table ingredients rename column saturated_fat_per_100g to saturated_fat_g;
+    alter table ingredients rename column salt_per_100g to salt_g;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ingredients' and column_name = 'nutrition_basis_amount') then
+    alter table ingredients add column nutrition_basis_amount numeric not null default 100;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ingredients' and column_name = 'nutrition_basis_unit') then
+    alter table ingredients add column nutrition_basis_unit text not null default 'g';
+  end if;
+  if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ingredients' and column_name = 'reference_weight_g') then
+    alter table ingredients add column reference_weight_g numeric;
+  end if;
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ingredients' and column_name = 'default_unit') then
+    alter table ingredients drop column default_unit;
+  end if;
+end $$;
+
+-- Shopping/pack info is independent of the nutrition basis — e.g. nutrition might be
+-- per 100g while the ingredient is actually sold in a 1kg bag for £1.49.
 create table if not exists ingredient_prices (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade default auth.uid(),
   ingredient_id uuid not null references ingredients(id) on delete cascade,
-  price numeric not null,
-  quantity numeric not null default 1,
-  unit text not null default 'g',
+  pack_price numeric not null,
+  pack_size numeric not null default 1,
+  pack_size_unit text not null default 'g',
   updated_at timestamptz not null default now(),
   unique (ingredient_id)
 );
 create index if not exists ingredient_prices_user_idx on ingredient_prices(user_id);
+
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ingredient_prices' and column_name = 'price') then
+    alter table ingredient_prices rename column price to pack_price;
+    alter table ingredient_prices rename column quantity to pack_size;
+    alter table ingredient_prices rename column unit to pack_size_unit;
+  end if;
+end $$;
+
+-- Optional per-ingredient custom conversions for recipe units that can't be safely
+-- assumed (e.g. "1 tbsp = 15g" for peanut butter). Always resolves to a weight (g)
+-- or volume (ml) amount so it can bridge into the nutrition-basis/pack-size math.
+create table if not exists ingredient_unit_conversions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade default auth.uid(),
+  ingredient_id uuid not null references ingredients(id) on delete cascade,
+  unit text not null,
+  equivalent_amount numeric not null,
+  equivalent_unit text not null check (equivalent_unit in ('g', 'ml')),
+  unique (ingredient_id, unit)
+);
+create index if not exists ingredient_unit_conversions_ingredient_idx on ingredient_unit_conversions(ingredient_id);
 
 -- User-editable ingredient categories (powers the category dropdown in Ingredients
 -- and the Shopping List). Existing ingredients keep whatever category text they
@@ -301,6 +361,7 @@ alter table nutrition_targets enable row level security;
 alter table ingredients enable row level security;
 alter table ingredient_prices enable row level security;
 alter table ingredient_categories enable row level security;
+alter table ingredient_unit_conversions enable row level security;
 alter table recipes enable row level security;
 alter table recipe_ingredients enable row level security;
 alter table recipe_tags enable row level security;
@@ -322,7 +383,7 @@ declare
   t text;
 begin
   foreach t in array array[
-    'nutrition_targets', 'ingredients', 'ingredient_prices', 'ingredient_categories',
+    'nutrition_targets', 'ingredients', 'ingredient_prices', 'ingredient_categories', 'ingredient_unit_conversions',
     'recipes', 'takeaways', 'meal_plans', 'food_logs', 'exercise_logs',
     'pantry_items', 'leftovers', 'shopping_lists', 'weight_logs'
   ]

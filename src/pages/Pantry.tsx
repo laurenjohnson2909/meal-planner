@@ -5,6 +5,7 @@ import { useDeletePantryItem, usePantry, useSavePantryItem } from '../hooks/useP
 import { useIngredients } from '../hooks/useIngredients'
 import { useAddLeftover, useDeleteLeftover, useLeftovers, useUpdateLeftover } from '../hooks/useLeftovers'
 import { useRecipes } from '../hooks/useRecipes'
+import { RECIPE_UNITS } from '../lib/units'
 import { todayStr } from '../lib/dates'
 
 export function Pantry() {
@@ -82,7 +83,14 @@ export function Pantry() {
       <Modal open={open} onClose={() => setOpen(false)} title="Add pantry item">
         <div className="space-y-3">
           <Field label="Ingredient">
-            <Select value={ingredientId} onChange={(e) => setIngredientId(e.target.value)}>
+            <Select
+              value={ingredientId}
+              onChange={(e) => {
+                setIngredientId(e.target.value)
+                const ing = ingredients?.find((i) => i.id === e.target.value)
+                if (ing) setUnit(ing.nutrition_basis_unit)
+              }}
+            >
               <option value="">Select an ingredient…</option>
               {ingredients?.map((i) => (
                 <option key={i.id} value={i.id}>
@@ -96,7 +104,13 @@ export function Pantry() {
               <Input type="number" value={quantity} onChange={(e) => setQuantity(+e.target.value)} />
             </Field>
             <Field label="Unit">
-              <Input value={unit} onChange={(e) => setUnit(e.target.value)} />
+              <Select value={unit} onChange={(e) => setUnit(e.target.value)}>
+                {RECIPE_UNITS.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </Select>
             </Field>
           </div>
           <Field label="Use-by date (optional)">

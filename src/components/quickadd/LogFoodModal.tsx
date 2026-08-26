@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { TriangleAlert } from 'lucide-react'
 import { Modal, Button, Field, Input, Select } from '../ui/Primitives'
 import { useRecipes } from '../../hooks/useRecipes'
-import { useIngredients } from '../../hooks/useIngredients'
+import { useIngredients, useIngredientUnitConversions } from '../../hooks/useIngredients'
 import { useFoodLog, useAddFoodLogItem, useRecentFoodLogItems } from '../../hooks/useFoodLog'
 import { useTakeaways } from '../../hooks/useTakeaways'
 import { ingredientContribution, recipePerServing } from '../../lib/nutrition'
+import { buildConversionsByIngredient, RECIPE_UNITS } from '../../lib/units'
 import { todayStr } from '../../lib/dates'
 import { MEAL_SLOTS, ZERO_NUTRITION, type MealSlot } from '../../types/models'
 
@@ -17,6 +19,7 @@ export function LogFoodModal({ open, onClose }: { open: boolean; onClose: () => 
 
   const { data: recipes } = useRecipes()
   const { data: ingredients } = useIngredients()
+  const { data: allConversions } = useIngredientUnitConversions()
   const { data: takeaways } = useTakeaways()
   const { data: log } = useFoodLog(date)
   const { data: recentItems } = useRecentFoodLogItems(30)
@@ -61,7 +64,8 @@ export function LogFoodModal({ open, onClose }: { open: boolean; onClose: () => 
   const [servings, setServings] = useState(1)
 
   const [ingredientId, setIngredientId] = useState('')
-  const [grams, setGrams] = useState(100)
+  const [ingredientQty, setIngredientQty] = useState(100)
+  const [ingredientUnit, setIngredientUnit] = useState('g')
 
   const [takeawayId, setTakeawayId] = useState('')
 
@@ -75,7 +79,8 @@ export function LogFoodModal({ open, onClose }: { open: boolean; onClose: () => 
     setRecipeId('')
     setServings(1)
     setIngredientId('')
-    setGrams(100)
+    setIngredientQty(100)
+    setIngredientUnit('g')
     setTakeawayId('')
     setCustomDesc('')
     setCustomCal(0)
@@ -83,6 +88,12 @@ export function LogFoodModal({ open, onClose }: { open: boolean; onClose: () => 
     setCustomCarbs(0)
     setCustomFat(0)
   }
+
+  const conversions = buildConversionsByIngredient(allConversions ?? [])
+  const selectedIngredient = ingredients?.find((i) => i.id === ingredientId)
+  const ingredientPreview = selectedIngredient
+    ? ingredientContribution(selectedIngredient, ingredientQty, ingredientUnit, conversions.get(selectedIngredient.id))
+    : null
 
   async function submit() {
     if (!log) return
@@ -109,17 +120,15 @@ export function LogFoodModal({ open, onClose }: { open: boolean; onClose: () => 
         salt_g: perServing.salt_g * servings,
       })
     } else if (tab === 'ingredient') {
-      const ingredient = ingredients?.find((i) => i.id === ingredientId)
-      if (!ingredient) return
-      const contribution = ingredientContribution(ingredient, grams)
+      if (!selectedIngredient || !ingredientPreview) return
       await addItem.mutateAsync({
         ...base,
         source_type: 'ingredient',
-        source_id: ingredient.id,
-        description: ingredient.name,
-        quantity: grams,
-        unit: 'g',
-        ...contribution,
+        source_id: selectedIngredient.id,
+        description: selectedIngredient.name,
+        quantity: ingredientQty,
+        unit: ingredientUnit,
+        ...ingredientPreview,
       })
     } else if (tab === 'takeaway') {
       const takeaway = takeaways?.find((t) => t.id === takeawayId)
@@ -224,7 +233,14 @@ export function LogFoodModal({ open, onClose }: { open: boolean; onClose: () => 
         {tab === 'ingredient' && (
           <div className="space-y-3">
             <Field label="Ingredient">
-              <Select value={ingredientId} onChange={(e) => setIngredientId(e.target.value)}>
+              <Select
+                value={ingredientId}
+                onChange={(e) => {
+                  setIngredientId(e.target.value)
+                  const ing = ingredients?.find((i) => i.id === e.target.value)
+                  if (ing) setIngredientUnit(ing.nutrition_basis_unit)
+                }}
+              >
                 <option value="">Select an ingredient…</option>
                 {ingredients?.map((i) => (
                   <option key={i.id} value={i.id}>
@@ -232,10 +248,36 @@ export function LogFoodModal({ open, onClose }: { open: boolean; onClose: () => 
                   </option>
                 ))}
               </Select>
+              {selectedIngredient && (
+                <p className="mt-1 text-xs text-text-dim">
+                  {selectedIngredient.calories} kcal / {selectedIngredient.nutrition_basis_amount}
+                  {selectedIngredient.nutrition_basis_unit}
+                </p>
+              )}
             </Field>
-            <Field label="Quantity (g)">
-              <Input type="number" value={grams} onChange={(e) => setGrams(+e.target.value)} />
-            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Quantity">
+                <Input type="number" value={ingredientQty} onChange={(e) => setIngredientQty(+e.target.value)} />
+              </Field>
+              <Field label="Unit">
+                <Select value={ingredientUnit} onChange={(e) => setIngredientUnit(e.target.value)}>
+                  {RECIPE_UNITS.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            {selectedIngredient &&
+              (ingredientPreview ? (
+                <p className="text-sm text-primary">{Math.round(ingredientPreview.calories)} kcal</p>
+              ) : (
+                <p className="flex items-center gap-1.5 text-xs text-warn">
+                  <TriangleAlert size={13} /> Can't calculate "{ingredientUnit}" for this ingredient — add a
+                  conversion on the Ingredients page.
+                </p>
+              ))}
           </div>
         )}
 
@@ -275,7 +317,11 @@ export function LogFoodModal({ open, onClose }: { open: boolean; onClose: () => 
           </div>
         )}
 
-        <Button className="w-full" onClick={submit} disabled={addItem.isPending}>
+        <Button
+          className="w-full"
+          onClick={submit}
+          disabled={addItem.isPending || (tab === 'ingredient' && !!selectedIngredient && !ingredientPreview)}
+        >
           Log it
         </Button>
       </div>

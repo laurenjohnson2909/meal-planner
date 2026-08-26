@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import type { Ingredient, IngredientPrice } from '../types/models'
+import type { Ingredient, IngredientPrice, IngredientUnitConversion } from '../types/models'
 import { useAuth } from './useAuth'
 
 export function useIngredients(search = '') {
@@ -81,15 +81,54 @@ export function useSaveIngredientPrice() {
   const { user } = useAuth()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (price: { ingredient_id: string; price: number; quantity: number; unit: string }) => {
+    mutationFn: async (pack: { ingredient_id: string; pack_price: number; pack_size: number; pack_size_unit: string }) => {
       const { error } = await supabase
         .from('ingredient_prices')
         .upsert(
-          { ...price, user_id: user!.id, updated_at: new Date().toISOString() },
+          { ...pack, user_id: user!.id, updated_at: new Date().toISOString() },
           { onConflict: 'ingredient_id' },
         )
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ingredient_prices'] }),
+  })
+}
+
+export function useIngredientUnitConversions() {
+  const { user } = useAuth()
+  return useQuery({
+    queryKey: ['ingredient_unit_conversions', user?.id],
+    enabled: !!user,
+    queryFn: async (): Promise<IngredientUnitConversion[]> => {
+      const { data, error } = await supabase.from('ingredient_unit_conversions').select('*')
+      if (error) throw error
+      return data ?? []
+    },
+  })
+}
+
+/** Replaces the full set of custom conversions for one ingredient (spec §9). */
+export function useSaveIngredientUnitConversions() {
+  const { user } = useAuth()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      ingredientId,
+      conversions,
+    }: {
+      ingredientId: string
+      conversions: { unit: string; equivalent_amount: number; equivalent_unit: 'g' | 'ml' }[]
+    }) => {
+      const { error: delError } = await supabase.from('ingredient_unit_conversions').delete().eq('ingredient_id', ingredientId)
+      if (delError) throw delError
+      const rows = conversions
+        .filter((c) => c.unit.trim() && c.equivalent_amount > 0)
+        .map((c) => ({ ...c, ingredient_id: ingredientId, user_id: user!.id }))
+      if (rows.length > 0) {
+        const { error } = await supabase.from('ingredient_unit_conversions').insert(rows)
+        if (error) throw error
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ingredient_unit_conversions'] }),
   })
 }

@@ -1,5 +1,5 @@
 import type { MealSlot, MealType, NutritionValues, OptimisePriority, RecipeWithDetails } from '../types/models'
-import { recipeCostTotal, recipeCostPerServing, recipePerServing } from './nutrition'
+import { recipeCostTotal, recipeCostPerServing, recipePerServing, type ConversionsByIngredient, type IngredientPack } from './nutrition'
 
 export interface OptimiseSlot {
   key: string // unique id for the slot, e.g. `${dayOfWeek}-${mealSlot}`
@@ -15,7 +15,8 @@ export interface OptimiserInput {
   priority: OptimisePriority
   dailyCalorieTarget: number
   dailyProteinTarget: number
-  pricesByIngredient: Map<string, { price: number; quantity: number }>
+  packsByIngredient: Map<string, IngredientPack>
+  conversions?: ConversionsByIngredient
   maxRepeatsPerRecipe?: number
 }
 
@@ -37,7 +38,8 @@ const MEAL_SLOT_TO_TYPE: Record<MealSlot, MealType> = {
  * already chosen this week, and caps how often the same recipe repeats.
  */
 export function optimiseWeek(input: OptimiserInput): OptimiserResult {
-  const { slots, recipes, priority, dailyCalorieTarget, dailyProteinTarget, pricesByIngredient } = input
+  const { slots, recipes, priority, dailyCalorieTarget, dailyProteinTarget, packsByIngredient } = input
+  const conversions = input.conversions ?? new Map()
   const maxRepeats = input.maxRepeatsPerRecipe ?? 2
 
   const assignments = new Map<string, string>()
@@ -75,7 +77,8 @@ export function optimiseWeek(input: OptimiserInput): OptimiserResult {
         usedIngredientIds,
         remainingCalories,
         remainingProtein,
-        pricesByIngredient,
+        packsByIngredient,
+        conversions,
         recipeUseCount,
       }),
     }))
@@ -94,7 +97,7 @@ export function optimiseWeek(input: OptimiserInput): OptimiserResult {
     const recipeId = slot.locked ? slot.lockedRecipeId : assignments.get(slot.key)
     const recipe = recipes.find((r) => r.id === recipeId)
     if (!recipe) continue
-    const total = recipeCostTotal(recipe.recipe_ingredients, pricesByIngredient)
+    const total = recipeCostTotal(recipe.recipe_ingredients, packsByIngredient, conversions)
     estimatedWeeklyCost += recipeCostPerServing(total, recipe.servings)
   }
 
@@ -108,12 +111,13 @@ function scoreRecipe(
     usedIngredientIds: Set<string>
     remainingCalories: number
     remainingProtein: number
-    pricesByIngredient: Map<string, { price: number; quantity: number }>
+    packsByIngredient: Map<string, IngredientPack>
+    conversions: ConversionsByIngredient
     recipeUseCount: Map<string, number>
   },
 ): number {
   const perServing = recipePerServing(recipe.recipe_ingredients, recipe.servings)
-  const totalCost = recipeCostTotal(recipe.recipe_ingredients, ctx.pricesByIngredient)
+  const totalCost = recipeCostTotal(recipe.recipe_ingredients, ctx.packsByIngredient, ctx.conversions)
   const costPerServing = recipeCostPerServing(totalCost, recipe.servings)
   const overlapCount = recipe.recipe_ingredients.filter((l) => ctx.usedIngredientIds.has(l.ingredient_id)).length
   const overlapRatio = recipe.recipe_ingredients.length > 0 ? overlapCount / recipe.recipe_ingredients.length : 0

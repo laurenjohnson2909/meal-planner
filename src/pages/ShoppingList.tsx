@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Plus, RefreshCw, Trash2 } from 'lucide-react
 import { Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select } from '../components/ui/Primitives'
 import { useMealPlan } from '../hooks/useMealPlan'
 import { usePantry } from '../hooks/usePantry'
-import { useIngredientPrices } from '../hooks/useIngredients'
+import { useIngredientPrices, useIngredients, useIngredientUnitConversions } from '../hooks/useIngredients'
 import { useIngredientCategoryNames } from '../hooks/useIngredientCategories'
 import {
   useAddManualShoppingItem,
@@ -12,7 +12,8 @@ import {
   useShoppingList,
   useToggleShoppingItem,
 } from '../hooks/useShoppingList'
-import { buildShoppingList, consolidateIngredients, groupByCategory } from '../lib/shoppingList'
+import { buildShoppingList, consolidateIngredients, groupByCategory, suggestPurchase } from '../lib/shoppingList'
+import { buildConversionsByIngredient } from '../lib/units'
 import { addDaysToDate, dayLabel, weekStart } from '../lib/dates'
 
 export function ShoppingList() {
@@ -22,6 +23,8 @@ export function ShoppingList() {
   const { data: pantry } = usePantry()
   const { data: list } = useShoppingList(weekOf)
   const { data: prices } = useIngredientPrices()
+  const { data: allIngredients } = useIngredients()
+  const { data: allConversions } = useIngredientUnitConversions()
   const { names: categories } = useIngredientCategoryNames()
   const regenerate = useRegenerateShoppingList()
   const toggle = useToggleShoppingItem()
@@ -37,10 +40,12 @@ export function ShoppingList() {
     if (!manualCategory && categories.length) setManualCategory(categories[0])
   }, [categories, manualCategory])
 
+  const conversions = buildConversionsByIngredient(allConversions ?? [])
+
   async function regenerateFromPlan() {
     if (!plan || !list) return
-    const required = consolidateIngredients(plan.items)
-    const consolidated = buildShoppingList(required, pantry ?? [])
+    const required = consolidateIngredients(plan.items, conversions)
+    const consolidated = buildShoppingList(required, pantry ?? [], conversions)
     await regenerate.mutateAsync({ listId: list.listId, items: consolidated })
   }
 
@@ -61,12 +66,13 @@ export function ShoppingList() {
   const items = list?.items ?? []
   const grouped = groupByCategory(items)
   const uncheckedCount = items.filter((i) => !i.checked).length
-  const pricesByIngredient = new Map((prices ?? []).map((p) => [p.ingredient_id, p]))
+  const packsByIngredient = new Map((prices ?? []).map((p) => [p.ingredient_id, p]))
+  const ingredientsById = new Map((allIngredients ?? []).map((i) => [i.id, i]))
   const estimatedCost = items.reduce((sum, item) => {
     if (!item.ingredient_id) return sum
-    const p = pricesByIngredient.get(item.ingredient_id)
-    if (!p || p.quantity <= 0) return sum
-    return sum + (p.price / p.quantity) * item.quantity
+    const pack = packsByIngredient.get(item.ingredient_id)
+    if (!pack || pack.pack_size <= 0) return sum
+    return sum + (pack.pack_price / pack.pack_size) * item.quantity
   }, 0)
 
   return (
@@ -109,22 +115,36 @@ export function ShoppingList() {
               <div key={category}>
                 <h3 className="mb-1.5 text-xs font-semibold text-text-dim">{category}</h3>
                 <div className="space-y-1">
-                  {catItems.map((item) => (
-                    <Card key={item.id} className="flex items-center gap-2 py-2">
-                      <input
-                        type="checkbox"
-                        checked={item.checked}
-                        onChange={(e) => toggle.mutate({ id: item.id, checked: e.target.checked })}
-                        className="h-4 w-4 accent-primary"
-                      />
-                      <span className={`flex-1 text-sm ${item.checked ? 'text-text-dim line-through' : ''}`}>
-                        {item.name} — {Math.round(item.quantity * 10) / 10}{item.unit}
-                      </span>
-                      <button onClick={() => del.mutate(item.id)} className="text-text-dim hover:text-danger">
-                        <Trash2 size={15} />
-                      </button>
-                    </Card>
-                  ))}
+                  {catItems.map((item) => {
+                    const ingredient = item.ingredient_id ? ingredientsById.get(item.ingredient_id) : undefined
+                    const pack = item.ingredient_id ? packsByIngredient.get(item.ingredient_id) : undefined
+                    const purchase =
+                      ingredient && pack
+                        ? suggestPurchase(item.quantity, item.unit, ingredient, pack, conversions.get(ingredient.id) ?? new Map())
+                        : null
+                    return (
+                      <Card key={item.id} className="flex items-center gap-2 py-2">
+                        <input
+                          type="checkbox"
+                          checked={item.checked}
+                          onChange={(e) => toggle.mutate({ id: item.id, checked: e.target.checked })}
+                          className="h-4 w-4 accent-primary"
+                        />
+                        <span className={`flex-1 text-sm ${item.checked ? 'text-text-dim line-through' : ''}`}>
+                          {item.name} — {purchase ? purchase.label : `${Math.round(item.quantity * 10) / 10}${item.unit}`}
+                          {purchase && (
+                            <span className="block text-xs text-text-dim">
+                              Required: {Math.round(item.quantity * 10) / 10}
+                              {item.unit}
+                            </span>
+                          )}
+                        </span>
+                        <button onClick={() => del.mutate(item.id)} className="text-text-dim hover:text-danger">
+                          <Trash2 size={15} />
+                        </button>
+                      </Card>
+                    )
+                  })}
                 </div>
               </div>
             ))}

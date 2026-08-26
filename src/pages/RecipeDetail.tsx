@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Star, Trash2, X } from 'lucide-react'
+import { Star, Trash2, TriangleAlert, X } from 'lucide-react'
 import { PageHeader, Button, Card, Field, Input, Select, Textarea, Spinner } from '../components/ui/Primitives'
 import { useDeleteRecipe, useRecipe, useSaveRecipe, useToggleFavourite, type RecipeIngredientInput } from '../hooks/useRecipes'
-import { useIngredientPrices, useIngredients } from '../hooks/useIngredients'
-import { recipeCostPerServing, recipeCostTotal, recipePerServing, recipeTotals } from '../lib/nutrition'
+import { useIngredientPrices, useIngredients, useIngredientUnitConversions } from '../hooks/useIngredients'
+import {
+  ingredientContribution,
+  recipeCostPerServing,
+  recipeCostTotal,
+  recipePerServing,
+  recipeTotals,
+  unresolvedLines,
+} from '../lib/nutrition'
+import { buildConversionsByIngredient, RECIPE_UNITS } from '../lib/units'
 import { RECIPE_TAGS } from '../types/models'
 import type { MealType } from '../types/models'
 
@@ -15,6 +23,7 @@ export function RecipeDetail() {
   const { data: recipe, isLoading } = useRecipe(id)
   const { data: allIngredients } = useIngredients()
   const { data: prices } = useIngredientPrices()
+  const { data: allConversions } = useIngredientUnitConversions()
   const save = useSaveRecipe()
   const del = useDeleteRecipe()
   const toggleFav = useToggleFavourite()
@@ -53,6 +62,8 @@ export function RecipeDetail() {
 
   if (!isNew && isLoading) return <Spinner />
 
+  const conversions = buildConversionsByIngredient(allConversions ?? [])
+
   const ingredientLines = ingredients
     .map((ri) => {
       const ingredient = allIngredients?.find((i) => i.id === ri.ingredient_id)
@@ -60,19 +71,32 @@ export function RecipeDetail() {
     })
     .filter((x): x is RecipeIngredientInput & { ingredient: NonNullable<typeof allIngredients>[number] } => !!x)
 
-  const totals = recipeTotals(ingredientLines)
-  const perServing = recipePerServing(ingredientLines, servings || 1)
-  const pricesByIngredient = new Map((prices ?? []).map((p) => [p.ingredient_id, { price: p.price, quantity: p.quantity }]))
-  const totalCost = recipeCostTotal(ingredientLines, pricesByIngredient)
+  const totals = recipeTotals(ingredientLines, conversions)
+  const perServing = recipePerServing(ingredientLines, servings || 1, conversions)
+  const unresolved = unresolvedLines(ingredientLines, conversions)
+  const packsByIngredient = new Map((prices ?? []).map((p) => [p.ingredient_id, p]))
+  const totalCost = recipeCostTotal(ingredientLines, packsByIngredient, conversions)
   const costPerServing = recipeCostPerServing(totalCost, servings || 1)
 
   function addIngredientRow() {
     if (!allIngredients?.length) return
-    setIngredients([...ingredients, { ingredient_id: allIngredients[0].id, quantity: 100, unit: 'g' }])
+    const first = allIngredients[0]
+    setIngredients([...ingredients, { ingredient_id: first.id, quantity: first.nutrition_basis_amount, unit: first.nutrition_basis_unit }])
   }
 
   function updateIngredientRow(i: number, patch: Partial<RecipeIngredientInput>) {
-    setIngredients(ingredients.map((row, idx) => (idx === i ? { ...row, ...patch } : row)))
+    setIngredients(
+      ingredients.map((row, idx) => {
+        if (idx !== i) return row
+        const next = { ...row, ...patch }
+        // Default the unit to the newly-picked ingredient's own basis unit, a sensible starting point.
+        if (patch.ingredient_id && patch.ingredient_id !== row.ingredient_id) {
+          const ing = allIngredients?.find((x) => x.id === patch.ingredient_id)
+          if (ing) next.unit = ing.nutrition_basis_unit
+        }
+        return next
+      }),
+    )
   }
 
   function removeIngredientRow(i: number) {
@@ -174,6 +198,13 @@ export function RecipeDetail() {
                 Est. cost: £{totalCost.toFixed(2)} total · £{costPerServing.toFixed(2)} / serving
               </p>
             )}
+            {unresolved.length > 0 && (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-warn">
+                <TriangleAlert size={13} />
+                {unresolved.map((l) => l.ingredient.name).join(', ')} not included — add a unit conversion for these
+                on the Ingredients page.
+              </p>
+            )}
           </Card>
 
           <Card>
@@ -270,31 +301,50 @@ export function RecipeDetail() {
               </button>
             </div>
             <div className="space-y-2">
-              {ingredients.map((row, i) => (
-                <div key={i} className="flex gap-2">
-                  <Select className="flex-1" value={row.ingredient_id} onChange={(e) => updateIngredientRow(i, { ingredient_id: e.target.value })}>
-                    {allIngredients?.map((ing) => (
-                      <option key={ing.id} value={ing.id}>
-                        {ing.name}
-                      </option>
-                    ))}
-                  </Select>
-                  <Input
-                    type="number"
-                    className="w-20"
-                    value={row.quantity}
-                    onChange={(e) => updateIngredientRow(i, { quantity: +e.target.value })}
-                  />
-                  <Input
-                    className="w-16"
-                    value={row.unit}
-                    onChange={(e) => updateIngredientRow(i, { unit: e.target.value })}
-                  />
-                  <button onClick={() => removeIngredientRow(i)} className="text-text-dim hover:text-danger">
-                    <X size={16} />
-                  </button>
-                </div>
-              ))}
+              {ingredients.map((row, i) => {
+                const ingredient = allIngredients?.find((x) => x.id === row.ingredient_id)
+                const contribution = ingredient ? ingredientContribution(ingredient, row.quantity, row.unit, conversions.get(ingredient.id)) : null
+                return (
+                  <div key={i}>
+                    <div className="flex gap-2">
+                      <Select className="flex-1" value={row.ingredient_id} onChange={(e) => updateIngredientRow(i, { ingredient_id: e.target.value })}>
+                        {allIngredients?.map((ing) => (
+                          <option key={ing.id} value={ing.id}>
+                            {ing.name}
+                          </option>
+                        ))}
+                      </Select>
+                      <Input
+                        type="number"
+                        className="w-20"
+                        value={row.quantity}
+                        onChange={(e) => updateIngredientRow(i, { quantity: +e.target.value })}
+                      />
+                      <Select className="w-24" value={row.unit} onChange={(e) => updateIngredientRow(i, { unit: e.target.value })}>
+                        {RECIPE_UNITS.map((u) => (
+                          <option key={u} value={u}>
+                            {u}
+                          </option>
+                        ))}
+                      </Select>
+                      <button onClick={() => removeIngredientRow(i)} className="text-text-dim hover:text-danger">
+                        <X size={16} />
+                      </button>
+                    </div>
+                    {ingredient && (
+                      <p className="mt-0.5 pl-1 text-xs text-text-dim">
+                        {ingredient.calories} kcal / {ingredient.nutrition_basis_amount}
+                        {ingredient.nutrition_basis_unit}
+                        {contribution ? (
+                          <> — this line: {Math.round(contribution.calories)} kcal</>
+                        ) : (
+                          <span className="text-warn"> — can't calculate this unit, add a conversion for "{row.unit}" on the Ingredients page</span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
               {ingredients.length === 0 && <p className="text-xs text-text-dim">No ingredients added yet.</p>}
             </div>
             {ingredients.length > 0 && (

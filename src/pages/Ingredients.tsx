@@ -12,7 +12,7 @@ import {
   useUploadIngredientImage,
 } from '../hooks/useIngredients'
 import { useIngredientCategoryNames } from '../hooks/useIngredientCategories'
-import { CONVERSION_TARGET_UNITS, NUTRITION_BASIS_UNITS, PACK_SIZE_UNITS, unitFamily } from '../lib/units'
+import { CONVERSION_SOURCE_UNITS, CONVERSION_TARGET_UNITS, NUTRITION_BASIS_UNITS, PACK_SIZE_UNITS, unitFamily } from '../lib/units'
 import type { Ingredient } from '../types/models'
 
 const BLANK: Partial<Ingredient> = {
@@ -327,7 +327,7 @@ function ConversionsEditor({
     <div>
       <div className="mb-1 flex items-center justify-between">
         <p className="text-xs text-text-dim">
-          Custom conversions — for recipe units that can't be safely assumed (e.g. "1 tbsp = 15g")
+          Custom conversions — for recipe/log/pantry units that can't be safely assumed (e.g. "1 tbsp = 15g")
         </p>
         <button
           onClick={() => setConversions([...conversions, { unit: 'tbsp', equivalent_amount: 15, equivalent_unit: 'g' }])}
@@ -340,7 +340,13 @@ function ConversionsEditor({
         {conversions.map((c, i) => (
           <div key={i} className="flex items-center gap-2 text-sm">
             <span>1</span>
-            <Input className="w-20" value={c.unit} onChange={(e) => update(i, { unit: e.target.value })} />
+            <Select className="w-24" value={c.unit} onChange={(e) => update(i, { unit: e.target.value })}>
+              {CONVERSION_SOURCE_UNITS.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </Select>
             <span>=</span>
             <Input
               type="number"

@@ -202,8 +202,7 @@ export function RecipeDetail() {
             {unresolved.length > 0 && (
               <p className="mt-2 flex items-center gap-1.5 text-xs text-warn">
                 <TriangleAlert size={13} />
-                {unresolved.map((l) => l.ingredient.name).join(', ')} not included — add a unit conversion for these
-                on the Ingredients page.
+                Not included — {unresolved.map((l) => `${l.ingredient.name} (add a "${l.unit}" conversion)`).join(', ')}.
               </p>
             )}
           </Card>

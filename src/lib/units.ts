@@ -4,6 +4,10 @@ export const NUTRITION_BASIS_UNITS = ['g', 'kg', 'ml', 'l', 'item', 'serving', '
 export const RECIPE_UNITS = ['g', 'kg', 'ml', 'l', 'item', 'slice', 'piece', 'tbsp', 'tsp', 'other'] as const
 export const PACK_SIZE_UNITS = ['g', 'kg', 'ml', 'l', 'item', 'pack', 'bottle', 'tin', 'other'] as const
 export const CONVERSION_TARGET_UNITS = ['g', 'ml'] as const
+/** Units a custom conversion can apply to — the non-weight/volume subset of RECIPE_UNITS,
+ * since g/kg/ml/l already convert automatically and don't need one. Must match the exact
+ * unit string a recipe/log/pantry row uses, so this is a picklist, not free text. */
+export const CONVERSION_SOURCE_UNITS = RECIPE_UNITS.filter((u) => u !== 'g' && u !== 'kg' && u !== 'ml' && u !== 'l')
 
 export type UnitFamily = 'weight' | 'volume' | 'other'
 

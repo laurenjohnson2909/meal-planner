@@ -66,6 +66,7 @@ export interface Ingredient extends NutritionValues {
   nutrition_basis_unit: string
   /** Optional bridge for item-based ingredients, e.g. "1 banana ≈ 120g". */
   reference_weight_g: number | null
+  image_url: string | null
   created_at: string
 }
 

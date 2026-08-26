@@ -64,6 +64,7 @@ create table if not exists ingredients (
   saturated_fat_g numeric not null default 0,
   salt_g numeric not null default 0,
   reference_weight_g numeric,
+  image_url text,
   created_at timestamptz not null default now()
 );
 create index if not exists ingredients_user_idx on ingredients(user_id);
@@ -95,7 +96,34 @@ begin
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ingredients' and column_name = 'default_unit') then
     alter table ingredients drop column default_unit;
   end if;
+  if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ingredients' and column_name = 'image_url') then
+    alter table ingredients add column image_url text;
+  end if;
 end $$;
+
+-- Storage bucket for ingredient photos. Public bucket (photo URLs are unguessable
+-- per-user/per-ingredient paths, not access-controlled) — simplest option and avoids
+-- signed-URL expiry for something this low-sensitivity. Uploads/edits/deletes are
+-- still restricted to the owner's own folder (path prefixed with their user id).
+insert into storage.buckets (id, name, public)
+values ('ingredient-images', 'ingredient-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists "Public read ingredient images" on storage.objects;
+create policy "Public read ingredient images" on storage.objects for select
+  using (bucket_id = 'ingredient-images');
+
+drop policy if exists "Owners upload ingredient images" on storage.objects;
+create policy "Owners upload ingredient images" on storage.objects for insert
+  with check (bucket_id = 'ingredient-images' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Owners update ingredient images" on storage.objects;
+create policy "Owners update ingredient images" on storage.objects for update
+  using (bucket_id = 'ingredient-images' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Owners delete ingredient images" on storage.objects;
+create policy "Owners delete ingredient images" on storage.objects for delete
+  using (bucket_id = 'ingredient-images' and (storage.foldername(name))[1] = auth.uid()::text);
 
 -- Shopping/pack info is independent of the nutrition basis — e.g. nutrition might be
 -- per 100g while the ingredient is actually sold in a 1kg bag for £1.49.

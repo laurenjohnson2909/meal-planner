@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Plus, Search, Trash2, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ImageIcon, Plus, Search, Trash2, Upload, X } from 'lucide-react'
 import { PageHeader, Button, Card, EmptyState, Field, Input, Modal, Select, Spinner } from '../components/ui/Primitives'
 import {
   useDeleteIngredient,
@@ -9,6 +9,7 @@ import {
   useSaveIngredient,
   useSaveIngredientPrice,
   useSaveIngredientUnitConversions,
+  useUploadIngredientImage,
 } from '../hooks/useIngredients'
 import { useIngredientCategoryNames } from '../hooks/useIngredientCategories'
 import { CONVERSION_TARGET_UNITS, NUTRITION_BASIS_UNITS, PACK_SIZE_UNITS, unitFamily } from '../lib/units'
@@ -29,6 +30,7 @@ const BLANK: Partial<Ingredient> = {
   saturated_fat_g: 0,
   salt_g: 0,
   reference_weight_g: null,
+  image_url: null,
 }
 
 interface ConversionRow {
@@ -52,7 +54,9 @@ export function Ingredients() {
   const save = useSaveIngredient()
   const savePrice = useSaveIngredientPrice()
   const saveConversions = useSaveIngredientUnitConversions()
+  const uploadImage = useUploadIngredientImage()
   const del = useDeleteIngredient()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!editing?.id) {
@@ -84,6 +88,14 @@ export function Ingredients() {
     return prices?.find((p) => p.ingredient_id === ingredientId)
   }
 
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !editing) return
+    const url = await uploadImage.mutateAsync(file)
+    setEditing({ ...editing, image_url: url })
+  }
+
   const basisIsItemLike = editing ? unitFamily(editing.nutrition_basis_unit ?? 'g') === 'other' : false
 
   return (
@@ -112,20 +124,29 @@ export function Ingredients() {
             const price = priceFor(ing.id)
             return (
               <Card key={ing.id} className="cursor-pointer">
-                <div className="flex items-start justify-between">
-                  <div onClick={() => setEditing(ing)} className="flex-1">
-                    <p className="font-medium">{ing.name}</p>
-                    {ing.brand && <p className="text-xs text-text-dim">{ing.brand}</p>}
-                    <p className="mt-1 text-xs text-text-dim">
-                      {ing.calories} kcal · {ing.protein_g}g protein / {ing.nutrition_basis_amount}
-                      {ing.nutrition_basis_unit}
-                    </p>
-                    {price && (
-                      <p className="text-xs text-text-dim">
-                        £{price.pack_price.toFixed(2)} / {price.pack_size}
-                        {price.pack_size_unit}
-                      </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div onClick={() => setEditing(ing)} className="flex flex-1 gap-3">
+                    {ing.image_url ? (
+                      <img src={ing.image_url} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+                    ) : (
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-surface-hi text-text-dim">
+                        <ImageIcon size={18} />
+                      </div>
                     )}
+                    <div>
+                      <p className="font-medium">{ing.name}</p>
+                      {ing.brand && <p className="text-xs text-text-dim">{ing.brand}</p>}
+                      <p className="mt-1 text-xs text-text-dim">
+                        {ing.calories} kcal · {ing.protein_g}g protein / {ing.nutrition_basis_amount}
+                        {ing.nutrition_basis_unit}
+                      </p>
+                      {price && (
+                        <p className="text-xs text-text-dim">
+                          £{price.pack_price.toFixed(2)} / {price.pack_size}
+                          {price.pack_size_unit}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <button onClick={() => del.mutate(ing.id)} className="text-text-dim hover:text-danger">
                     <Trash2 size={16} />
@@ -142,6 +163,34 @@ export function Ingredients() {
           <div className="space-y-5">
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-text-dim">Basic information</p>
+              <div className="flex items-center gap-3">
+                {editing.image_url ? (
+                  <img src={editing.image_url} alt="" className="h-16 w-16 rounded-lg object-cover" />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-surface-hi text-text-dim">
+                    <ImageIcon size={22} />
+                  </div>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadImage.isPending}
+                  >
+                    <Upload size={14} /> {uploadImage.isPending ? 'Uploading…' : editing.image_url ? 'Change photo' : 'Add photo'}
+                  </Button>
+                  {editing.image_url && (
+                    <button
+                      onClick={() => setEditing({ ...editing, image_url: null })}
+                      className="text-xs text-text-dim hover:text-danger"
+                    >
+                      Remove photo
+                    </button>
+                  )}
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Name">
                   <Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />

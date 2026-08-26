@@ -132,3 +132,18 @@ export function useSaveIngredientUnitConversions() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ingredient_unit_conversions'] }),
   })
 }
+
+/** Uploads a photo to the ingredient-images bucket and returns its public URL. */
+export function useUploadIngredientImage() {
+  const { user } = useAuth()
+  return useMutation({
+    mutationFn: async (file: File): Promise<string> => {
+      const ext = file.name.split('.').pop() || 'jpg'
+      const path = `${user!.id}/${crypto.randomUUID()}.${ext}`
+      const { error } = await supabase.storage.from('ingredient-images').upload(path, file, { upsert: false })
+      if (error) throw error
+      const { data } = supabase.storage.from('ingredient-images').getPublicUrl(path)
+      return data.publicUrl
+    },
+  })
+}

@@ -58,7 +58,27 @@ export function Ingredients() {
   const del = useDeleteIngredient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Loads the pack/conversion fields once per modal "session" (opening an ingredient
+  // to edit), not on every keystroke — editing a nutrition field creates a new
+  // `editing` object on every change, and re-syncing from `prices`/`allConversions`
+  // on each of those would wipe out shopping-info the user just typed but hasn't
+  // saved yet. `sessionToken` only changes when the modal is opened via openEditor().
+  const [sessionToken, setSessionToken] = useState(0)
+  const initializedSession = useRef(-1)
+
+  function openEditor(ing: Partial<Ingredient>) {
+    setEditing(ing)
+    setSessionToken((t) => t + 1)
+  }
+
   useEffect(() => {
+    if (initializedSession.current === sessionToken) return
+    // Wait for both queries to resolve at least once before initialising an existing
+    // ingredient's fields, so we don't briefly (and then permanently, for this
+    // session) treat a saved price as absent while the query is still loading.
+    if (editing?.id && (prices === undefined || allConversions === undefined)) return
+    initializedSession.current = sessionToken
+
     if (!editing?.id) {
       setPackPrice('')
       setPackSize(1)
@@ -72,7 +92,7 @@ export function Ingredients() {
     setPackSizeUnit(existingPrice?.pack_size_unit ?? editing.nutrition_basis_unit ?? 'g')
     const existingConversions = (allConversions ?? []).filter((c) => c.ingredient_id === editing.id)
     setConversions(existingConversions.map((c) => ({ unit: c.unit, equivalent_amount: c.equivalent_amount, equivalent_unit: c.equivalent_unit })))
-  }, [editing, prices, allConversions])
+  }, [sessionToken, editing, prices, allConversions])
 
   async function submit() {
     if (!editing?.name) return
@@ -103,7 +123,7 @@ export function Ingredients() {
       <PageHeader
         title="Ingredients"
         action={
-          <Button onClick={() => setEditing({ ...BLANK, category: categories[0] ?? '' })}>
+          <Button onClick={() => openEditor({ ...BLANK, category: categories[0] ?? '' })}>
             <Plus size={16} /> Add
           </Button>
         }
@@ -125,7 +145,7 @@ export function Ingredients() {
             return (
               <Card key={ing.id} className="cursor-pointer">
                 <div className="flex items-start justify-between gap-3">
-                  <div onClick={() => setEditing(ing)} className="flex flex-1 gap-3">
+                  <div onClick={() => openEditor(ing)} className="flex flex-1 gap-3">
                     {ing.image_url ? (
                       <img src={ing.image_url} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
                     ) : (

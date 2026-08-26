@@ -7,10 +7,12 @@ import { useMealPlan } from '../hooks/useMealPlan'
 import { useExerciseLogs } from '../hooks/useExercise'
 import { usePantry } from '../hooks/usePantry'
 import { useLeftovers } from '../hooks/useLeftovers'
-import { sumNutrition } from '../lib/nutrition'
+import { useRecipes } from '../hooks/useRecipes'
+import { calorieTargetForDay, sumNutrition } from '../lib/nutrition'
 import { dayOfWeekIndex, todayStr, weekStart } from '../lib/dates'
 import { useQuickAdd } from '../hooks/useQuickAdd'
 import { analyseIngredientReuse } from '../lib/reuse'
+import { whatCanIMake } from '../lib/recommend'
 
 export function Dashboard() {
   const today = todayStr()
@@ -24,27 +26,38 @@ export function Dashboard() {
   const { data: exerciseLogs } = useExerciseLogs(today, today)
   const { data: pantry } = usePantry()
   const { data: leftovers } = useLeftovers()
+  const { data: recipes } = useRecipes()
 
   const eaten = sumNutrition(log?.items ?? [])
   const todaysPlanItems = (plan?.items ?? []).filter((i) => i.day_of_week === dayIndex)
   const exerciseMinutes = (exerciseLogs ?? []).reduce((sum, e) => sum + (e.duration_min ?? 0), 0)
 
   const t = targets
+  const todayCalorieTarget = calorieTargetForDay(t, dayIndex)
   const remaining = {
-    calories: (t?.calories ?? 2000) - eaten.calories,
+    calories: todayCalorieTarget - eaten.calories,
     protein_g: (t?.protein_g ?? 120) - eaten.protein_g,
     carbs_g: (t?.carbs_g ?? 220) - eaten.carbs_g,
     fat_g: (t?.fat_g ?? 70) - eaten.fat_g,
   }
 
-  const soonToExpire = (pantry ?? []).filter((p) => {
-    if (!p.use_by_date) return false
-    const days = (new Date(p.use_by_date).getTime() - Date.now()) / 86_400_000
+  function isSoon(dateStr: string | null) {
+    if (!dateStr) return false
+    const days = (new Date(dateStr).getTime() - Date.now()) / 86_400_000
     return days <= 3 && days >= -1
-  })
+  }
+  const soonToExpire = (pantry ?? []).filter((p) => isSoon(p.use_by_date))
+  const leftoversExpiringSoon = (leftovers ?? []).filter((l) => isSoon(l.use_by_date))
 
   const reuseUsage = analyseIngredientReuse(plan?.items ?? [])
   const repeatedIngredients = reuseUsage.filter((u) => u.recipeCount >= 3).slice(0, 5)
+
+  const plannedIngredientIds = new Set(
+    (plan?.items ?? []).flatMap((i) => i.recipe?.recipe_ingredients.map((ri) => ri.ingredient_id) ?? []),
+  )
+  const fittingMeals = whatCanIMake(recipes ?? [], pantry ?? [], plannedIngredientIds, remaining.calories, remaining.protein_g)
+    .filter((r) => r.fitsRemaining && r.missingIngredientCount === 0)
+    .slice(0, 3)
 
   return (
     <div className="space-y-5">
@@ -55,7 +68,7 @@ export function Dashboard() {
 
       <Card>
         <div className="mb-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Stat label="Calories" value={eaten.calories} target={t?.calories ?? 2000} />
+          <Stat label="Calories" value={eaten.calories} target={todayCalorieTarget} />
           <Stat label="Protein" value={eaten.protein_g} target={t?.protein_g ?? 120} suffix="g" />
           <Stat label="Carbs" value={eaten.carbs_g} target={t?.carbs_g ?? 220} suffix="g" />
           <Stat label="Fat" value={eaten.fat_g} target={t?.fat_g ?? 70} suffix="g" />
@@ -102,11 +115,26 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {soonToExpire.length > 0 && (
+      {(soonToExpire.length > 0 || leftoversExpiringSoon.length > 0) && (
         <Card className="border-warn/40">
           <h2 className="mb-1 text-sm font-semibold text-warn">Use it up soon</h2>
           <p className="text-xs text-text-dim">
-            {soonToExpire.map((p) => p.ingredient.name).join(', ')} — approaching their use-by date.
+            {[...soonToExpire.map((p) => p.ingredient.name), ...leftoversExpiringSoon.map((l) => l.recipe?.name ?? 'leftovers')].join(
+              ', ',
+            )}{' '}
+            — approaching their use-by date.
+          </p>
+        </Card>
+      )}
+
+      {fittingMeals.length > 0 && (
+        <Card>
+          <h2 className="mb-1 text-sm font-semibold text-text-dim">Fits what's left today</h2>
+          <p className="text-xs text-text-dim">
+            {fittingMeals.map((m) => m.recipe.name).join(', ')} — ready to make with what you have.{' '}
+            <Link to="/recommendations" className="text-primary hover:underline">
+              See more
+            </Link>
           </p>
         </Card>
       )}

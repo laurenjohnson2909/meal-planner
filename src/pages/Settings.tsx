@@ -3,6 +3,7 @@ import { PageHeader, Button, Card, Field, Input, Select } from '../components/ui
 import { useNutritionTargets, useProfile, useUpdateNutritionTargets, useUpdateProfile } from '../hooks/useProfile'
 import { ACTIVITY_MULTIPLIERS, calculateCalorieTarget, calculateMacroTargets } from '../lib/nutrition'
 import type { ActivityLevel, Goal, Sex } from '../types/models'
+import { DAYS_OF_WEEK } from '../types/models'
 
 export function Settings() {
   const { data: profile } = useProfile()
@@ -27,6 +28,7 @@ export function Settings() {
   const [sugar, setSugar] = useState(50)
   const [satFat, setSatFat] = useState(20)
   const [salt, setSalt] = useState(6)
+  const [dailyOverrides, setDailyOverrides] = useState<Record<string, number>>({})
 
   useEffect(() => {
     if (!profile) return
@@ -50,6 +52,7 @@ export function Settings() {
     setSugar(targets.sugar_g)
     setSatFat(targets.saturated_fat_g)
     setSalt(targets.salt_g)
+    setDailyOverrides(targets.daily_calorie_overrides ?? {})
   }, [targets])
 
   async function saveProfile() {
@@ -75,6 +78,16 @@ export function Settings() {
       sugar_g: sugar,
       saturated_fat_g: satFat,
       salt_g: salt,
+      daily_calorie_overrides: dailyOverrides,
+    })
+  }
+
+  function setDayOverride(day: number, value: number | '') {
+    setDailyOverrides((prev) => {
+      const next = { ...prev }
+      if (value === '') delete next[String(day)]
+      else next[String(day)] = value
+      return next
     })
   }
 
@@ -163,6 +176,23 @@ export function Settings() {
           <NumField label="Sat. fat (g)" value={satFat} onChange={setSatFat} />
           <NumField label="Salt (g)" value={salt} onChange={setSalt} />
         </div>
+
+        <p className="mb-2 mt-4 text-xs font-medium text-text-dim">
+          Per-day calorie overrides (optional — e.g. a higher Friday target)
+        </p>
+        <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+          {DAYS_OF_WEEK.map((day, i) => (
+            <Field key={day} label={day.slice(0, 3)}>
+              <Input
+                type="number"
+                placeholder={String(calories)}
+                value={dailyOverrides[String(i)] ?? ''}
+                onChange={(e) => setDayOverride(i, e.target.value === '' ? '' : +e.target.value)}
+              />
+            </Field>
+          ))}
+        </div>
+
         <Button className="mt-3" onClick={saveTargets} disabled={updateTargets.isPending}>
           Save targets
         </Button>

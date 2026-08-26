@@ -32,6 +32,7 @@ export function RecipeDetail() {
   const [ingredients, setIngredients] = useState<RecipeIngredientInput[]>([])
   const [tags, setTags] = useState<string[]>([])
   const [editing, setEditing] = useState(isNew)
+  const [scaleTo, setScaleTo] = useState(4)
 
   useEffect(() => {
     if (!recipe) return
@@ -47,6 +48,7 @@ export function RecipeDetail() {
     setInstructions(recipe.instructions.length ? recipe.instructions : [''])
     setIngredients(recipe.recipe_ingredients.map((ri) => ({ ingredient_id: ri.ingredient_id, quantity: ri.quantity, unit: ri.unit })))
     setTags(recipe.recipe_tags.map((t) => t.tag))
+    setScaleTo(recipe.servings)
   }, [recipe])
 
   if (!isNew && isLoading) return <Spinner />
@@ -175,15 +177,35 @@ export function RecipeDetail() {
           </Card>
 
           <Card>
-            <h2 className="mb-2 text-sm font-semibold text-text-dim">Ingredients</h2>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-text-dim">Ingredients</h2>
+              <div className="flex items-center gap-1.5 text-xs text-text-dim">
+                Scale to
+                <Input
+                  type="number"
+                  min={1}
+                  value={scaleTo}
+                  onChange={(e) => setScaleTo(+e.target.value)}
+                  className="w-14 py-1 text-center"
+                />
+                servings
+              </div>
+            </div>
             <ul className="space-y-1 text-sm">
-              {recipe.recipe_ingredients.map((ri) => (
-                <li key={ri.id}>
-                  {ri.quantity}
-                  {ri.unit} {ri.ingredient.name}
-                </li>
-              ))}
+              {recipe.recipe_ingredients.map((ri) => {
+                const factor = scaleTo / Math.max(recipe.servings, 1e-9)
+                const scaledQty = Math.round(ri.quantity * factor * 10) / 10
+                return (
+                  <li key={ri.id}>
+                    {scaledQty}
+                    {ri.unit} {ri.ingredient.name}
+                  </li>
+                )
+              })}
             </ul>
+            {scaleTo !== recipe.servings && (
+              <p className="mt-2 text-xs text-text-dim">Scaled from the original {recipe.servings} servings.</p>
+            )}
           </Card>
 
           {recipe.instructions.length > 0 && (

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Modal, Button, Field, Input, Select } from '../ui/Primitives'
 import { useRecipes } from '../../hooks/useRecipes'
 import { useIngredients } from '../../hooks/useIngredients'
-import { useFoodLog, useAddFoodLogItem } from '../../hooks/useFoodLog'
+import { useFoodLog, useAddFoodLogItem, useRecentFoodLogItems } from '../../hooks/useFoodLog'
 import { useTakeaways } from '../../hooks/useTakeaways'
 import { ingredientContribution, recipePerServing } from '../../lib/nutrition'
 import { todayStr } from '../../lib/dates'
@@ -19,7 +19,43 @@ export function LogFoodModal({ open, onClose }: { open: boolean; onClose: () => 
   const { data: ingredients } = useIngredients()
   const { data: takeaways } = useTakeaways()
   const { data: log } = useFoodLog(date)
+  const { data: recentItems } = useRecentFoodLogItems(30)
   const addItem = useAddFoodLogItem()
+
+  const recentUnique = (() => {
+    const seen = new Set<string>()
+    const out: typeof recentItems = []
+    for (const item of recentItems ?? []) {
+      const key = `${item.source_type}:${item.source_id ?? item.description}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out!.push(item)
+      if (out!.length >= 6) break
+    }
+    return out ?? []
+  })()
+
+  async function logRecent(item: NonNullable<typeof recentItems>[number]) {
+    if (!log) return
+    await addItem.mutateAsync({
+      food_log_id: log.logId,
+      meal_slot: mealSlot,
+      source_type: item.source_type,
+      source_id: item.source_id,
+      description: item.description,
+      quantity: item.quantity,
+      unit: item.unit,
+      calories: item.calories,
+      protein_g: item.protein_g,
+      carbs_g: item.carbs_g,
+      fat_g: item.fat_g,
+      fibre_g: item.fibre_g,
+      sugar_g: item.sugar_g,
+      saturated_fat_g: item.saturated_fat_g,
+      salt_g: item.salt_g,
+    })
+    onClose()
+  }
 
   const [recipeId, setRecipeId] = useState('')
   const [servings, setServings] = useState(1)
@@ -136,6 +172,24 @@ export function LogFoodModal({ open, onClose }: { open: boolean; onClose: () => 
             </Select>
           </Field>
         </div>
+
+        {recentUnique.length > 0 && (
+          <div>
+            <p className="mb-1 text-xs font-medium text-text-dim">Recent — tap to log again</p>
+            <div className="flex flex-wrap gap-1.5">
+              {recentUnique.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => logRecent(item)}
+                  className="rounded-full bg-surface-hi px-2.5 py-1 text-xs text-text hover:bg-border"
+                  disabled={addItem.isPending}
+                >
+                  {item.description ?? item.source_type} · {Math.round(item.calories)} kcal
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-1 rounded-lg bg-surface-hi p-1 text-xs">
           {(['recipe', 'ingredient', 'takeaway', 'custom'] as Tab[]).map((t) => (

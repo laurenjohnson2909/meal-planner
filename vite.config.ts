@@ -25,4 +25,9 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    // Single-user app with no route-based code-splitting needed; Supabase + React
+    // Query + Router comfortably fit in one chunk well under a meaningful load-time cost.
+    chunkSizeWarningLimit: 700,
+  },
 })

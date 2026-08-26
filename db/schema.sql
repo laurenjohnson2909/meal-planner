@@ -33,6 +33,9 @@ create table if not exists nutrition_targets (
   sugar_g numeric not null default 50,
   saturated_fat_g numeric not null default 20,
   salt_g numeric not null default 6,
+  -- Per-weekday calorie overrides, e.g. {"4": 2600} for a higher Friday target (spec §12).
+  -- Keys are day_of_week strings, 0 = Monday .. 6 = Sunday. Missing days use `calories`.
+  daily_calorie_overrides jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 

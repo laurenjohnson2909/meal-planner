@@ -50,6 +50,8 @@ export interface UserProfile {
 
 export interface NutritionTargets extends NutritionValues {
   user_id: string
+  /** day_of_week (0=Mon..6=Sun) -> calorie override, e.g. a higher Friday target. */
+  daily_calorie_overrides: Record<string, number>
   updated_at: string
 }
 

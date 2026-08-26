@@ -82,6 +82,15 @@ const GOAL_ADJUSTMENT: Record<string, number> = {
   gain: 300,
 }
 
+/** Spec §12: some days (e.g. Friday) can carry a different calorie target than the rest. */
+export function calorieTargetForDay(
+  targets: { calories: number; daily_calorie_overrides: Record<string, number> } | null | undefined,
+  dayOfWeek: number,
+): number {
+  if (!targets) return 2000
+  return targets.daily_calorie_overrides[String(dayOfWeek)] ?? targets.calories
+}
+
 /** Mifflin-St Jeor BMR, scaled by activity level, adjusted for goal. */
 export function calculateCalorieTarget(opts: {
   sex: 'male' | 'female' | 'other'

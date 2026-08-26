@@ -4,16 +4,18 @@ import { Button, Card, PageHeader } from '../components/ui/Primitives'
 import { AssignMealModal } from '../components/plan/AssignMealModal'
 import { OptimiseModal } from '../components/plan/OptimiseModal'
 import { useDeletePlanItem, useDuplicatePlanItem, useMealPlan, useUpdatePlanItem } from '../hooks/useMealPlan'
+import { useRecipes } from '../hooks/useRecipes'
 import { addDaysToDate, dayLabel, weekStart } from '../lib/dates'
 import { DAYS_OF_WEEK, MEAL_SLOTS } from '../types/models'
 import type { MealPlanItemWithDetails, MealSlot } from '../types/models'
-import { analyseIngredientReuse, singleUseIngredients } from '../lib/reuse'
+import { analyseIngredientReuse, singleUseIngredients, suggestReuseAlternatives } from '../lib/reuse'
 
 export function WeeklyPlan() {
   const [weekOf, setWeekOf] = useState(weekStart())
   const [assignTarget, setAssignTarget] = useState<{ day: number; slot: MealSlot } | null>(null)
   const [optimiseOpen, setOptimiseOpen] = useState(false)
   const { data: plan } = useMealPlan(weekOf)
+  const { data: allRecipes } = useRecipes()
   const updateItem = useUpdatePlanItem()
   const deleteItem = useDeletePlanItem()
   const duplicateItem = useDuplicatePlanItem()
@@ -21,6 +23,12 @@ export function WeeklyPlan() {
   const items = plan?.items ?? []
   const usage = analyseIngredientReuse(items)
   const singleUse = singleUseIngredients(usage)
+  const plannedIngredientIds = new Set(items.flatMap((i) => i.recipe?.recipe_ingredients.map((ri) => ri.ingredient_id) ?? []))
+  const alternatives = suggestReuseAlternatives(
+    singleUse,
+    (allRecipes ?? []).map((r) => ({ name: r.name, ingredientIds: r.recipe_ingredients.map((ri) => ri.ingredient_id) })),
+    plannedIngredientIds,
+  ).filter((a) => a.alternativeRecipeNames.length > 0)
 
   function itemsFor(day: number, slot: MealSlot) {
     return items.filter((i) => i.day_of_week === day && i.meal_slot === slot)
@@ -108,6 +116,17 @@ export function WeeklyPlan() {
             {singleUse.map((u) => u.ingredient.name).join(', ')} — only used in one recipe. Consider swapping for
             something already planned to reduce waste.
           </p>
+          {alternatives.length > 0 && (
+            <ul className="mt-2 space-y-1 text-xs text-text-dim">
+              {alternatives.map((a) => (
+                <li key={a.ingredient.id}>
+                  Instead of <span className="text-text">{a.ingredient.name}</span>, recipes like{' '}
+                  <span className="text-text">{a.alternativeRecipeNames.join(', ')}</span> reuse ingredients already
+                  in this week's plan.
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       )}
 

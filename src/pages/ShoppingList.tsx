@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select } from '../components/ui/Primitives'
 import { useMealPlan } from '../hooks/useMealPlan'
 import { usePantry } from '../hooks/usePantry'
 import { useIngredientPrices } from '../hooks/useIngredients'
+import { useIngredientCategoryNames } from '../hooks/useIngredientCategories'
 import {
   useAddManualShoppingItem,
   useDeleteShoppingItem,
@@ -13,7 +14,6 @@ import {
 } from '../hooks/useShoppingList'
 import { buildShoppingList, consolidateIngredients, groupByCategory } from '../lib/shoppingList'
 import { addDaysToDate, dayLabel, weekStart } from '../lib/dates'
-import { INGREDIENT_CATEGORIES } from '../types/models'
 
 export function ShoppingList() {
   const [weekOf, setWeekOf] = useState(weekStart())
@@ -22,6 +22,7 @@ export function ShoppingList() {
   const { data: pantry } = usePantry()
   const { data: list } = useShoppingList(weekOf)
   const { data: prices } = useIngredientPrices()
+  const { names: categories } = useIngredientCategoryNames()
   const regenerate = useRegenerateShoppingList()
   const toggle = useToggleShoppingItem()
   const del = useDeleteShoppingItem()
@@ -30,7 +31,11 @@ export function ShoppingList() {
   const [manualName, setManualName] = useState('')
   const [manualQty, setManualQty] = useState(1)
   const [manualUnit, setManualUnit] = useState('g')
-  const [manualCategory, setManualCategory] = useState<string>(INGREDIENT_CATEGORIES[0])
+  const [manualCategory, setManualCategory] = useState('')
+
+  useEffect(() => {
+    if (!manualCategory && categories.length) setManualCategory(categories[0])
+  }, [categories, manualCategory])
 
   async function regenerateFromPlan() {
     if (!plan || !list) return
@@ -142,7 +147,7 @@ export function ShoppingList() {
           </div>
           <Field label="Category">
             <Select value={manualCategory} onChange={(e) => setManualCategory(e.target.value)}>
-              {INGREDIENT_CATEGORIES.map((c) => (
+              {categories.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>

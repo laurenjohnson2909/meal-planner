@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { Plus, Search, Trash2 } from 'lucide-react'
 import { PageHeader, Button, Card, EmptyState, Field, Input, Modal, Select, Spinner } from '../components/ui/Primitives'
 import { useDeleteIngredient, useIngredientPrices, useIngredients, useSaveIngredient, useSaveIngredientPrice } from '../hooks/useIngredients'
+import { useIngredientCategoryNames } from '../hooks/useIngredientCategories'
 import type { Ingredient } from '../types/models'
-import { INGREDIENT_CATEGORIES } from '../types/models'
 
 const BLANK: Partial<Ingredient> = {
   name: '',
   brand: '',
-  category: INGREDIENT_CATEGORIES[0],
+  category: '',
   calories_per_100g: 0,
   protein_per_100g: 0,
   carbs_per_100g: 0,
@@ -28,6 +28,7 @@ export function Ingredients() {
   const [priceUnit, setPriceUnit] = useState('g')
   const { data: ingredients, isLoading } = useIngredients(search)
   const { data: prices } = useIngredientPrices()
+  const { names: categories } = useIngredientCategoryNames()
   const save = useSaveIngredient()
   const savePrice = useSaveIngredientPrice()
   const del = useDeleteIngredient()
@@ -63,7 +64,7 @@ export function Ingredients() {
       <PageHeader
         title="Ingredients"
         action={
-          <Button onClick={() => setEditing(BLANK)}>
+          <Button onClick={() => setEditing({ ...BLANK, category: categories[0] ?? '' })}>
             <Plus size={16} /> Add
           </Button>
         }
@@ -117,7 +118,7 @@ export function Ingredients() {
             </div>
             <Field label="Category">
               <Select value={editing.category ?? ''} onChange={(e) => setEditing({ ...editing, category: e.target.value })}>
-                {INGREDIENT_CATEGORIES.map((c) => (
+                {categories.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>

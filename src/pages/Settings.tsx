@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import { PageHeader, Button, Card, Field, Input, Select } from '../components/ui/Primitives'
 import { useNutritionTargets, useProfile, useUpdateNutritionTargets, useUpdateProfile } from '../hooks/useProfile'
+import { useIngredientCategoryNames, useSaveIngredientCategories } from '../hooks/useIngredientCategories'
 import { ACTIVITY_MULTIPLIERS, calculateCalorieTarget, calculateMacroTargets } from '../lib/nutrition'
 import type { ActivityLevel, Goal, Sex } from '../types/models'
 import { DAYS_OF_WEEK } from '../types/models'
@@ -197,7 +199,62 @@ export function Settings() {
           Save targets
         </Button>
       </Card>
+
+      <IngredientCategoriesCard />
     </div>
+  )
+}
+
+function IngredientCategoriesCard() {
+  const { names: savedNames } = useIngredientCategoryNames()
+  const saveCategories = useSaveIngredientCategories()
+  const [categories, setCategories] = useState<string[]>([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    if (loaded) return
+    setCategories(savedNames)
+    setLoaded(true)
+  }, [savedNames, loaded])
+
+  function updateCategory(i: number, value: string) {
+    setCategories(categories.map((c, idx) => (idx === i ? value : c)))
+  }
+
+  function removeCategory(i: number) {
+    setCategories(categories.filter((_, idx) => idx !== i))
+  }
+
+  return (
+    <Card>
+      <h2 className="mb-1 text-sm font-semibold text-text-dim">Ingredient categories</h2>
+      <p className="mb-3 text-xs text-text-dim">
+        Powers the category dropdown on Ingredients and the Shopping List. Renaming or removing one here doesn't
+        change the category already saved on existing ingredients.
+      </p>
+      <div className="space-y-2">
+        {categories.map((cat, i) => (
+          <div key={i} className="flex gap-2">
+            <Input value={cat} onChange={(e) => updateCategory(i, e.target.value)} />
+            <button onClick={() => removeCategory(i)} className="text-text-dim hover:text-danger">
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button onClick={() => setCategories([...categories, ''])} className="text-xs text-primary hover:underline">
+          + Add category
+        </button>
+      </div>
+      <Button
+        className="mt-3"
+        onClick={() => saveCategories.mutate(categories)}
+        disabled={saveCategories.isPending || categories.every((c) => !c.trim())}
+      >
+        Save categories
+      </Button>
+    </Card>
   )
 }
 

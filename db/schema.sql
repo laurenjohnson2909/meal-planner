@@ -74,6 +74,18 @@ create table if not exists ingredient_prices (
 );
 create index if not exists ingredient_prices_user_idx on ingredient_prices(user_id);
 
+-- User-editable ingredient categories (powers the category dropdown in Ingredients
+-- and the Shopping List). Existing ingredients keep whatever category text they
+-- already have even if a category is later renamed or removed from this list.
+create table if not exists ingredient_categories (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade default auth.uid(),
+  name text not null,
+  sort_order int not null default 0,
+  unique (user_id, name)
+);
+create index if not exists ingredient_categories_user_idx on ingredient_categories(user_id);
+
 -- ============================================================
 -- Recipes
 -- ============================================================
@@ -288,6 +300,7 @@ alter table user_profiles enable row level security;
 alter table nutrition_targets enable row level security;
 alter table ingredients enable row level security;
 alter table ingredient_prices enable row level security;
+alter table ingredient_categories enable row level security;
 alter table recipes enable row level security;
 alter table recipe_ingredients enable row level security;
 alter table recipe_tags enable row level security;
@@ -309,7 +322,7 @@ declare
   t text;
 begin
   foreach t in array array[
-    'nutrition_targets', 'ingredients', 'ingredient_prices',
+    'nutrition_targets', 'ingredients', 'ingredient_prices', 'ingredient_categories',
     'recipes', 'takeaways', 'meal_plans', 'food_logs', 'exercise_logs',
     'pantry_items', 'leftovers', 'shopping_lists', 'weight_logs'
   ]

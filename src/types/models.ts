@@ -247,7 +247,8 @@ export interface WeightLog {
 
 export const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
 export const MEAL_SLOTS: MealSlot[] = ['breakfast', 'lunch', 'dinner', 'snacks']
-export const INGREDIENT_CATEGORIES = [
+/** Seeded into ingredient_categories the first time a user saves their category list in Settings. */
+export const DEFAULT_INGREDIENT_CATEGORIES = [
   'Meat & Protein',
   'Fruit & Vegetables',
   'Dairy',
@@ -257,6 +258,13 @@ export const INGREDIENT_CATEGORIES = [
   'Drinks',
   'Other',
 ] as const
+
+export interface IngredientCategory {
+  id: string
+  user_id: string
+  name: string
+  sort_order: number
+}
 export const RECIPE_TAGS = [
   'High Protein',
   'Low Calorie',
